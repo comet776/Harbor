@@ -116,17 +116,23 @@ function isEligibleTrackerPlayback(i: LibraryItem): boolean {
   return true;
 }
 
+function mergeKey(i: LibraryItem): string {
+  const clean = i._id.replace(/^(series|movie|tmdb:tv|tmdb:movie|tmdb):/, "").trim();
+  return `${i.type}|${clean || i._id}`;
+}
+
 function merge(lists: LibraryItem[][]): LibraryItem[] {
-  const byId = new Map<string, LibraryItem>();
+  const byKey = new Map<string, LibraryItem>();
   for (const list of lists) {
     for (const i of list) {
       if (!isEligibleTrackerPlayback(i)) continue;
-      const held = byId.get(i._id);
-      if (!held) byId.set(i._id, i);
-      else byId.set(i._id, mergeItem(held, i));
+      const key = mergeKey(i);
+      const held = byKey.get(key);
+      if (!held) byKey.set(key, i);
+      else byKey.set(key, mergeItem(held, i));
     }
   }
-  return [...byId.values()].sort((a, b) => activityOf(b) - activityOf(a));
+  return [...byKey.values()].sort((a, b) => activityOf(b) - activityOf(a));
 }
 
 // Pre-populate items synchronously on module load from disk cache
