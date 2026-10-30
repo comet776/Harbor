@@ -2405,7 +2405,7 @@ async function pullWatchProgressOnce(
       slot,
       playback.filter(
         (row) =>
-          row.upNext === true ||
+          (cwKeepsCaughtUpForTimer() && row.upNext === true) ||
           ids.has(row._id) ||
           ids.has(row._id.replace(/^(series|movie|tmdb):/, "")),
       ),
