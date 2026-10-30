@@ -296,6 +296,7 @@ export async function pushNuvioProfiles(payloads: ProfilePushPayload[]): Promise
       profile_background_id: p.profile_background_id || null,
       profile_background_url: p.profile_background_url || null,
       pin_enabled: Boolean(p.pin_enabled),
+      is_kids: Boolean(p.is_kids),
     };
   });
 
@@ -506,6 +507,7 @@ export async function createNuvioProfile(opts: {
   avatarId?: string | null;
   avatarUrl?: string | null;
   usesPrimaryAddons?: boolean;
+  isKids?: boolean;
   profileIndex?: number;
 }): Promise<boolean> {
   let state = loadNuvioState();
@@ -563,6 +565,7 @@ export async function createNuvioProfile(opts: {
     profile_background_id: p.profile_background_id ?? null,
     profile_background_url: p.profile_background_url ?? null,
     pin_enabled: Boolean(p.pin_enabled),
+    is_kids: Boolean(p.is_kids),
   }));
 
   payloads.push({
@@ -574,6 +577,7 @@ export async function createNuvioProfile(opts: {
     uses_primary_plugins: false,
     avatar_id: avatarId,
     avatar_url: avatarUrl,
+    is_kids: Boolean(opts.isKids),
   });
 
   // OPTIMISTIC LOCAL UPDATE: Immediately add to local state for 0ms latency
@@ -589,7 +593,7 @@ export async function createNuvioProfile(opts: {
     avatar_id: avatarId,
     avatar_url: avatarUrl,
     pin_enabled: false,
-    is_kids: false,
+    is_kids: Boolean(opts.isKids),
     created_at: new Date().toISOString(),
   };
   const updatedProfiles = [...existing.filter((p) => p.profile_index !== nextIndex), newProfile];
@@ -687,6 +691,7 @@ export async function updateNuvioProfile(
               avatar_id: p.profile_index === profileIndex ? null : (p.avatar_id ?? null),
               avatar_url: p.avatar_url,
               pin_enabled: Boolean(p.pin_enabled),
+              is_kids: Boolean(p.is_kids),
             }));
             void pushNuvioProfiles(payloads);
           }
@@ -774,6 +779,7 @@ export async function updateNuvioProfile(
         profile_background_id: p.profile_background_id ?? null,
         profile_background_url: p.profile_background_url ?? null,
         pin_enabled: Boolean(p.pin_enabled),
+        is_kids: updates.is_kids !== undefined ? updates.is_kids : Boolean(p.is_kids),
       };
     }
     return {
@@ -787,6 +793,7 @@ export async function updateNuvioProfile(
       profile_background_id: p.profile_background_id ?? null,
       profile_background_url: p.profile_background_url ?? null,
       pin_enabled: Boolean(p.pin_enabled),
+      is_kids: Boolean(p.is_kids),
     };
   });
 
@@ -949,6 +956,7 @@ export async function transferPrimaryNuvioProfile(targetSlotIndex: number): Prom
             avatar_color_hex: targetSlot.avatar_color_hex || "#1E88E5",
             uses_primary_addons: false,
             pin_enabled: Boolean(targetSlot.pin_enabled),
+            is_kids: Boolean(targetSlot.is_kids),
           };
         }
         if (p.profile_index === targetSlotIndex) {
@@ -960,6 +968,7 @@ export async function transferPrimaryNuvioProfile(targetSlotIndex: number): Prom
             avatar_color_hex: slot1.avatar_color_hex || "#1E88E5",
             uses_primary_addons: slot1.uses_primary_addons ?? true,
             pin_enabled: Boolean(slot1.pin_enabled),
+            is_kids: Boolean(slot1.is_kids),
           };
         }
         return {
@@ -973,6 +982,7 @@ export async function transferPrimaryNuvioProfile(targetSlotIndex: number): Prom
           profile_background_id: p.profile_background_id || null,
           profile_background_url: p.profile_background_url || null,
           pin_enabled: Boolean(p.pin_enabled),
+          is_kids: Boolean(p.is_kids),
         };
       });
       await pushNuvioProfiles(payloads);
@@ -1118,6 +1128,7 @@ export async function deleteNuvioProfile(profileIndex: number): Promise<boolean>
         profile_background_id: p.profile_background_id ?? null,
         profile_background_url: p.profile_background_url ?? null,
         pin_enabled: Boolean(p.pin_enabled),
+        is_kids: Boolean(p.is_kids),
       }));
       await pushNuvioProfiles(remainingPayloads);
       await pullNuvioProfiles();

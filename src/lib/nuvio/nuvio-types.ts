@@ -48,6 +48,7 @@ export type ProfilePushPayload = {
   profile_background_id?: string | null;
   profile_background_url?: string | null;
   pin_enabled?: boolean;
+  is_kids?: boolean;
 };
 
 export type PinVerifyResult = {

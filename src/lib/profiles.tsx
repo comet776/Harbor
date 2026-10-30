@@ -66,9 +66,23 @@ export function defaultNuvioHarborProfile(slot = 1): Profile {
 
 function nuvioProfileToHarborProfile(p: NuvioProfile): Profile {
   let lockedTabs: HiddenTabs | null = null;
+  let kid: KidConfig | null = null;
   try {
     const raw = localStorage.getItem(`harbor.nuvio.locked-tabs.${p.profile_index}`);
     if (raw) lockedTabs = JSON.parse(raw);
+  } catch {
+    /* ignore */
+  }
+  try {
+    const raw = localStorage.getItem(`harbor.nuvio.kid.${p.profile_index}`);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<KidConfig>;
+      kid = {
+        age: typeof parsed.age === "number" ? parsed.age : 7,
+        curfewMinutes: typeof parsed.curfewMinutes === "number" ? parsed.curfewMinutes : null,
+        parentPinHash: typeof parsed.parentPinHash === "string" ? parsed.parentPinHash : null,
+      };
+    }
   } catch {
     /* ignore */
   }
@@ -82,7 +96,7 @@ function nuvioProfileToHarborProfile(p: NuvioProfile): Profile {
     passwordHash: p.pin_enabled ? getCachedNuvioPinHash(p.profile_index) || "pin-protected" : null,
     hideContent: null,
     lockedTabs,
-    kid: p.is_kids ? { age: 7, curfewMinutes: null, parentPinHash: null } : null,
+    kid: kid ?? (p.is_kids ? { age: 7, curfewMinutes: null, parentPinHash: null } : null),
     createdAt: p.created_at ? new Date(p.created_at).getTime() : Date.now(),
   };
 }

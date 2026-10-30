@@ -82,6 +82,13 @@ test("Profile mutations preserve pin_enabled for every profile in the pushed ros
   );
 });
 
+test("Nuvio kid state is persisted to the cloud profile roster", () => {
+  assert.match(nuvioProfiles, /is_kids: Boolean\(opts\.isKids\)/);
+  assert.match(nuvioProfiles, /is_kids: Boolean\(p\.is_kids\)/);
+  assert.match(editorView, /isKids: Boolean\(kidToSave\)/);
+  assert.match(editorView, /is_kids: isPrimary \? false : Boolean\(kidToSave\)/);
+});
+
 test("Profile deletion purges slot-scoped caches and survives offline", () => {
   assert.match(nuvioProfiles, /purgeNuvioSlotStorage\(profileIndex\)/);
   assert.match(nuvioProfiles, /queueProfileDelete\(profileIndex\)/);

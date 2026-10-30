@@ -458,6 +458,7 @@ export function EditorView({
             avatarColorHex: color,
             avatarUrl: finalAvatarUrl,
             usesPrimaryAddons,
+            isKids: Boolean(kidToSave),
             profileIndex: targetSlot,
           });
           if (targetSlot === 1 && finalAvatarUrl) {
@@ -482,6 +483,7 @@ export function EditorView({
             avatar_color_hex: color,
             avatar_url: finalAvatarUrl,
             uses_primary_addons: isPrimary ? false : usesPrimaryAddons,
+            is_kids: isPrimary ? false : Boolean(kidToSave),
           });
           if ((isPrimary || nuvioSlot === 1) && finalAvatarUrl) {
             void pushAvatarToEcosystem(finalAvatarUrl);
@@ -1267,7 +1269,9 @@ export function EditorView({
                       if (!transferTarget) return;
                       if (isNuvio) {
                         const targetSlot = parseInt(transferTarget.replace(/\D/g, ""), 10);
-                        await transferPrimaryNuvioProfile(targetSlot);
+                        // A locked or deleted target must leave the editor open
+                        // rather than closing as if the transfer succeeded.
+                        if (!(await transferPrimaryNuvioProfile(targetSlot))) return;
                       } else {
                         setPrimary(transferTarget);
                       }

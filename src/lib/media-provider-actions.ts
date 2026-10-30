@@ -955,10 +955,7 @@ export function watchedProviderWrites(
 
               const cachedWatched = readCachedWatchedItems(slot);
               const remainingWatched = cachedWatched.filter(
-                (w) =>
-                  w.season != null &&
-                  w.episode != null &&
-                  allIds.some((id) => w.content_id === id || w.content_id.includes(id)),
+                (w) => w.season != null && w.episode != null && allIds.includes(w.content_id),
               );
               if (remainingWatched.length > 0) {
                 const nextCw = {
