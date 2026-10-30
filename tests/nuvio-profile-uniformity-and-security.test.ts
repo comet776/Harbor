@@ -67,6 +67,21 @@ test("PIN deletion removes PIN locally, clears session unlock, and synchronizes 
   assert.match(nuvioProfiles, /\/rest\/v1\/rpc\/clear_profile_pin/);
 });
 
+test("Profile mutations preserve pin_enabled for every profile in the pushed roster", () => {
+  const preserved = nuvioProfiles.match(/pin_enabled: Boolean\(p\.pin_enabled\)/g) ?? [];
+  assert.ok(
+    preserved.length >= 6,
+    "every Nuvio profile payload builder must forward the existing pin_enabled flag",
+  );
+  // A passwordHash-only patch must not trigger a full roster push.
+  assert.match(profilesModule, /Object\.keys\(nuvioPatch\)\.length > 0/);
+  // Setting a Nuvio PIN must not write a synthetic Stremio passwordHash back.
+  assert.match(
+    editorView,
+    /await setNuvioPin\([\s\S]*?setTempOldPin\(null\);[\s\S]*?\} else if \(editing\) \{/,
+  );
+});
+
 test("PIN switch security strictly prevents bypassing PIN when changing profiles", () => {
   // setActiveNuvioProfile clears previous profile session unlocks
   assert.match(nuvioProfiles, /nuvioSessionUnlockedIndices\.clear\(\)/);

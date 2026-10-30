@@ -927,11 +927,19 @@ export function DetailView({
           if (watchedItems !== null) {
             const serverEpisodeKeys = new Set<string>();
             for (const it of safeWatchedItems) {
-              if (typeof it.season === "number" && typeof it.episode === "number" && it.content_id) {
+              if (
+                typeof it.season === "number" &&
+                typeof it.episode === "number" &&
+                it.content_id
+              ) {
                 serverEpisodeKeys.add(`${it.content_id}|${it.season}|${it.episode}`);
               }
             }
-            const { changed } = reconcileNuvioWatchedEpisodes(profileIndex, serverEpisodeKeys, targetIds);
+            const { changed } = reconcileNuvioWatchedEpisodes(
+              profileIndex,
+              serverEpisodeKeys,
+              targetIds,
+            );
             if (changed) {
               void reconcileNuvioWatched(profileIndex, { force: true });
             }

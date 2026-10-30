@@ -106,11 +106,9 @@ export async function cloudLibraryPut(
 
 export async function flushWriteQueue(): Promise<void> {
   if (isNuvioProviderActive()) {
-    load();
-    if (queue.size > 0) {
-      queue.clear();
-      persist();
-    }
+    // Keep pending Stremio writes while Nuvio is active. They are flushed when
+    // the user returns to Stremio (or on the next Stremio-mode launch); dropping
+    // them here loses offline writes made before the provider switch.
     return;
   }
   load();

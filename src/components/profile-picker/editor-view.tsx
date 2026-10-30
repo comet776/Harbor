@@ -569,10 +569,11 @@ export function EditorView({
         onBack={() => setSubView({ kind: "security" })}
         onComplete={async (pin) => {
           if (isNuvio && editing && nuvioSlot) {
+            // The Nuvio PIN lives on the cloud profile; do not write a synthetic
+            // Stremio passwordHash back through updateProfile, which re-pushed the
+            // roster and cleared pin_enabled.
             await setNuvioPin(nuvioSlot, pin, tempOldPin || undefined);
             setTempOldPin(null);
-            const hash = await hashProfilePassword(pin);
-            updateProfile(editing.id, { passwordHash: hash });
           } else if (editing) {
             const hash = await hashProfilePassword(pin);
             updateProfile(editing.id, { passwordHash: hash });
@@ -628,7 +629,6 @@ export function EditorView({
         onComplete={async (currentPin) => {
           if (isNuvio && nuvioSlot) {
             await clearNuvioPin(nuvioSlot, currentPin);
-            updateProfile(editing.id, { passwordHash: null });
           } else {
             updateProfile(editing.id, { passwordHash: null });
           }

@@ -482,12 +482,7 @@ export function buildNuvioPlaybackItems(
     let nextSeason = seed.season;
     let nextEpisode = seed.episode + 1;
 
-    if (
-      !keptForTimer &&
-      localMatch &&
-      localMatch.season != null &&
-      localMatch.episode != null
-    ) {
+    if (!keptForTimer && localMatch && localMatch.season != null && localMatch.episode != null) {
       const order = (s: number, e: number) => s * 100000 + e;
       const seedNextOrder = seed.season * 100000 + (seed.episode + 1);
       const localOrder = localMatch.season * 100000 + localMatch.episode;

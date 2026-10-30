@@ -1580,7 +1580,7 @@ async function reconcileNuvioWatchedOnce(
     isNuvioProviderActive() &&
     getNuvioAccountId() === accountId &&
     resolveNuvioProfileIndex() === profileIndex &&
-    (force || keys.every((key, i) => localStorage.getItem(key) === before[i]))
+    keys.every((key, i) => localStorage.getItem(key) === before[i])
       ? applyPending(pulled, profileIndex, accountId, "watched", true, pending).items
       : null;
   if (
@@ -1646,8 +1646,7 @@ async function reconcileNuvioWatchedOnce(
                 (p) =>
                   p.kind === "watched" &&
                   !p.deleted &&
-                  (p.row.content_id === localId ||
-                    (cleanLocal && p.row.content_id === cleanLocal)),
+                  (p.row.content_id === localId || (cleanLocal && p.row.content_id === cleanLocal)),
               );
               if (!hasPending) {
                 setWatchedFlag(localId, false, profileIndex);
@@ -1799,9 +1798,7 @@ async function reconcileNuvioWatchedOnce(
           const nextS = nextTarget.season;
           const nextE = nextTarget.episode;
           const localHasProgress =
-            (entry.positionMs ?? 0) > 0 &&
-            entry.season === nextS &&
-            entry.episode === nextE;
+            (entry.positionMs ?? 0) > 0 && entry.season === nextS && entry.episode === nextE;
           const newPos = localHasProgress ? entry.positionMs : 0;
           if (entry.season !== nextS || entry.episode !== nextE || entry.positionMs !== newPos) {
             saveLocalCw(
@@ -2441,7 +2438,8 @@ async function pullWatchProgressOnce(
   }
   saveLatestNuvioLocalProgress(items, slot);
   const state = loadNuvioState();
-  if (state.session?.user?.id === accountId) saveNuvioState({ ...state, lastSyncedAt: Date.now() }, { silent: true });
+  if (state.session?.user?.id === accountId)
+    saveNuvioState({ ...state, lastSyncedAt: Date.now() }, { silent: true });
   window.dispatchEvent(
     new CustomEvent("harbor:nuvio-progress-reconciled", {
       detail: { profileIndex: slot, count: items.length },
@@ -2507,6 +2505,7 @@ export function clearCachedNuvioAddons(): void {
  */
 export async function pullAddonsFromNuvio(
   harborProfileId?: string | number,
+  options?: { throwOnError?: boolean },
 ): Promise<NuvioAddonItem[]> {
   if (!isNuvioSignedIn()) return [];
 
@@ -2521,6 +2520,7 @@ export async function pullAddonsFromNuvio(
       console.warn(
         `[nuvio] failed to pull addons (status ${res.status}) for profile ${profileIndex}`,
       );
+      if (options?.throwOnError) throw new Error(`Nuvio addon pull failed (${res.status})`);
       return readCachedNuvioAddons(profileIndex);
     }
 
@@ -2530,6 +2530,7 @@ export async function pullAddonsFromNuvio(
     return safeList;
   } catch (err) {
     console.warn("[nuvio] failed to pull addons", err);
+    if (options?.throwOnError) throw err;
     return readCachedNuvioAddons(profileIndex);
   }
 }
@@ -2568,12 +2569,11 @@ export async function fetchNuvioAddons(harborProfileId?: string | number): Promi
   let items = cachedItems;
 
   try {
-    const fresh = await pullAddonsFromNuvio(profileIndex);
-    if (fresh.length > 0 || cachedItems.length === 0) {
-      items = fresh;
-    }
+    // A successful pull is authoritative even when the remote list is empty;
+    // otherwise addons deleted on another device never disappear here.
+    items = await pullAddonsFromNuvio(profileIndex, { throwOnError: true });
   } catch {
-    // Keep cachedItems
+    // Keep cachedItems when the network/API call failed.
   }
 
   const activeItems = items.filter((n) => n.enabled !== false);

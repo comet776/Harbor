@@ -79,9 +79,7 @@ function nuvioProfileToHarborProfile(p: NuvioProfile): Profile {
     color: p.avatar_color_hex || PROFILE_COLORS[(p.profile_index - 1) % PROFILE_COLORS.length],
     isPrimary: p.profile_index === 1,
     shareStremioWith: null,
-    passwordHash: p.pin_enabled
-      ? getCachedNuvioPinHash(p.profile_index) || "pin-protected"
-      : null,
+    passwordHash: p.pin_enabled ? getCachedNuvioPinHash(p.profile_index) || "pin-protected" : null,
     hideContent: null,
     lockedTabs,
     kid: p.is_kids ? { age: 7, curfewMinutes: null, parentPinHash: null } : null,
@@ -1017,7 +1015,9 @@ export function ProfilesProvider({ children }: { children: ReactNode }) {
         }
         window.dispatchEvent(new Event("harbor:nuvio-profiles-updated"));
       }
-      updateNuvioProfile(slot, nuvioPatch);
+      // passwordHash is a Stremio-only field. Pushing an empty patch here used to
+      // re-send the full Nuvio roster and clear pin_enabled on every profile.
+      if (Object.keys(nuvioPatch).length > 0) updateNuvioProfile(slot, nuvioPatch);
       return;
     }
     setState((s) => {

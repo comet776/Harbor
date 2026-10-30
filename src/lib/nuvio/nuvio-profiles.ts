@@ -490,6 +490,7 @@ export async function createNuvioProfile(opts: {
     avatar_url: p.avatar_url ?? null,
     profile_background_id: p.profile_background_id ?? null,
     profile_background_url: p.profile_background_url ?? null,
+    pin_enabled: Boolean(p.pin_enabled),
   }));
 
   payloads.push({
@@ -611,8 +612,9 @@ export async function updateNuvioProfile(
               avatar_color_hex: p.avatar_color_hex || "#1E88E5",
               uses_primary_addons: Boolean(p.uses_primary_addons),
               uses_primary_plugins: Boolean(p.uses_primary_plugins),
-              avatar_id: null,
+              avatar_id: p.profile_index === profileIndex ? null : (p.avatar_id ?? null),
               avatar_url: p.avatar_url,
+              pin_enabled: Boolean(p.pin_enabled),
             }));
             void pushNuvioProfiles(payloads);
           }
@@ -699,6 +701,7 @@ export async function updateNuvioProfile(
         avatar_url: finalAvatarUrl,
         profile_background_id: p.profile_background_id ?? null,
         profile_background_url: p.profile_background_url ?? null,
+        pin_enabled: Boolean(p.pin_enabled),
       };
     }
     return {
@@ -711,6 +714,7 @@ export async function updateNuvioProfile(
       avatar_url: p.avatar_url ?? null,
       profile_background_id: p.profile_background_id ?? null,
       profile_background_url: p.profile_background_url ?? null,
+      pin_enabled: Boolean(p.pin_enabled),
     };
   });
 
@@ -896,6 +900,7 @@ export async function transferPrimaryNuvioProfile(targetSlotIndex: number): Prom
           uses_primary_plugins: Boolean(p.uses_primary_plugins),
           profile_background_id: p.profile_background_id || null,
           profile_background_url: p.profile_background_url || null,
+          pin_enabled: Boolean(p.pin_enabled),
         };
       });
       await pushNuvioProfiles(payloads);
@@ -1034,6 +1039,7 @@ export async function deleteNuvioProfile(profileIndex: number): Promise<boolean>
         avatar_url: p.avatar_url ?? null,
         profile_background_id: p.profile_background_id ?? null,
         profile_background_url: p.profile_background_url ?? null,
+        pin_enabled: Boolean(p.pin_enabled),
       }));
       await pushNuvioProfiles(remainingPayloads);
       await pullNuvioProfiles();
