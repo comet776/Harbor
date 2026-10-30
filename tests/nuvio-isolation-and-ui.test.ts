@@ -29,11 +29,18 @@ test("movie-watched scopes storage key by active Nuvio slot and supports profile
   );
 });
 
-test("reconcileNuvioWatched passes profileIndex to setWatchedFlag and setMovieWatchedLocal", () => {
-  assert.match(nuvioSync, /setWatchedFlag\(id, true, profileIndex\)/);
-  assert.match(nuvioSync, /setMovieWatchedLocal\(id, true, profileIndex\)/);
-  assert.match(nuvioSync, /setWatchedFlag\(localId, false, profileIndex\)/);
-  assert.match(nuvioSync, /setMovieWatchedLocal\(localId, false, profileIndex\)/);
+test("reconcileNuvioWatched commits verified snapshots with batched invariance writes", () => {
+  assert.match(
+    nuvioSync,
+    /reconcileNuvioWatchedFlags\(profileIndex, serverWatchedIds, accountId\)/,
+  );
+  assert.match(
+    nuvioSync,
+    /reconcileNuvioMovieWatched\(profileIndex, serverMovieIds, accountId, pendingMovieIds\)/,
+  );
+  // Per-id writes here were O(n^2) on large libraries and bypassed the batch reconcilers.
+  assert.doesNotMatch(nuvioSync, /setWatchedFlag\(id, true, profileIndex\)/);
+  assert.doesNotMatch(nuvioSync, /setMovieWatchedLocal\(id, true, profileIndex\)/);
 });
 
 test("detail page clears watched state on profile switch and isolates Nuvio profile slot", () => {

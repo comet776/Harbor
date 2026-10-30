@@ -5,7 +5,6 @@ import {
   resolveNuvioProfileIndex,
   pullWatchedItemsFromNuvio,
   readCachedWatchedItems,
-  pullDismissedNextUpKeysFromNuvio,
   readCachedDismissedNextUpKeys,
   isDismissedNextUp,
   cwKeepsCaughtUpForTimer,
@@ -22,6 +21,52 @@ import { manualWatchedState } from "@/lib/manual-watched";
 
 const DURATION_MS = { movie: 6_300_000, series: 2_640_000 };
 const PLAYBACK_ITEMS_CACHE_PREFIX = "harbor.nuvio.playback_items.";
+const FINISHED_SERIES_PREFIX = "harbor.nuvio.finished_series.v1.";
+
+function finishedSeriesKey(slot?: number): string {
+  const acc = getNuvioAccountId() || "anon";
+  return `${FINISHED_SERIES_PREFIX}${acc}.slot.${slot ?? resolveNuvioProfileIndex()}`;
+}
+
+/** Series the metadata resolver confirmed have no next episode. */
+export function readFinishedNuvioSeries(slot?: number): Set<string> {
+  try {
+    const raw = localStorage.getItem(finishedSeriesKey(slot));
+    const parsed = raw ? JSON.parse(raw) : [];
+    return new Set(
+      Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [],
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+export function markNuvioSeriesFinished(ids: Iterable<string>, slot?: number): void {
+  const set = readFinishedNuvioSeries(slot);
+  let changed = false;
+  for (const id of ids) {
+    if (id && !set.has(id)) {
+      set.add(id);
+      changed = true;
+    }
+  }
+  if (!changed) return;
+  try {
+    localStorage.setItem(finishedSeriesKey(slot), JSON.stringify([...set]));
+  } catch {}
+}
+
+export function clearNuvioSeriesFinished(ids: Iterable<string>, slot?: number): void {
+  const set = readFinishedNuvioSeries(slot);
+  let changed = false;
+  for (const id of ids) {
+    if (id && set.delete(id)) changed = true;
+  }
+  if (!changed) return;
+  try {
+    localStorage.setItem(finishedSeriesKey(slot), JSON.stringify([...set]));
+  } catch {}
+}
 
 function getPlaybackItemsKey(slot: number, accountId?: string): string {
   const acc = accountId || getNuvioAccountId() || "anon";
@@ -111,6 +156,7 @@ export function buildNuvioPlaybackItems(
 
   const dismissed = dismissedKeys ?? readCachedDismissedNextUpKeys(profileIndex);
   const watched = watchedItems ?? readCachedWatchedItems(profileIndex);
+  const finishedSeries = readFinishedNuvioSeries(profileIndex);
 
   // Group records by content_id so each series/movie has a single consolidated Continue Watching card
   const byContent = new Map<string, NuvioWatchProgress[]>();
@@ -464,9 +510,21 @@ export function buildNuvioPlaybackItems(
     // Check if local CW has a newer or advanced target episode
     const localMatch =
       localCwEntry(seriesId, true, ownerId) || localCwEntry(seriesId, false, ownerId);
+    const localAdvanced =
+      !!localMatch &&
+      localMatch.season != null &&
+      localMatch.episode != null &&
+      (localMatch.season > seed.season ||
+        (localMatch.season === seed.season && localMatch.episode > seed.episode));
+    const isFinished =
+      !localAdvanced &&
+      [seriesId, cleanSeriesId, `tmdb:${cleanSeriesId}`, `series:${cleanSeriesId}`].some((id) =>
+        finishedSeries.has(id),
+      );
+    if (isFinished && !keepCaughtUpForTimer) continue;
     const isFullyWatched =
       fullyWatchedSeriesIds.has(seriesId) || fullyWatchedSeriesIds.has(cleanSeriesId);
-    let keptForTimer = false;
+    let keptForTimer = isFinished;
     if (isFullyWatched) {
       if (!localMatch || localMatch.season == null || localMatch.episode == null) {
         if (!keepCaughtUpForTimer) continue;
@@ -684,7 +742,9 @@ export async function fetchNuvioPlaybackItems(
     const [progRes, watchedRes, dismissedRes] = await Promise.all([
       pullWatchProgressFromNuvio(profileIndex),
       pullWatchedItemsFromNuvio(profileIndex, { force }),
-      pullDismissedNextUpKeysFromNuvio(profileIndex),
+      // Reconciliation refreshes this blob on its own cadence; reading the cache
+      // here keeps a 30s tray refresh from adding a fourth network request.
+      Promise.resolve(readCachedDismissedNextUpKeys(profileIndex)),
     ]);
     records = progRes;
     watched = watchedRes;

@@ -23,6 +23,77 @@ import type {
 
 export const MAX_NUVIO_PROFILES = 6;
 
+const PENDING_PROFILE_DELETES_KEY = "harbor.nuvio.pending_profile_deletes.v1";
+
+function readPendingProfileDeletes(): number[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(PENDING_PROFILE_DELETES_KEY) ?? "[]");
+    return Array.isArray(parsed)
+      ? parsed.filter((n): n is number => Number.isInteger(n) && n >= 1 && n <= MAX_NUVIO_PROFILES)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function writePendingProfileDeletes(slots: number[]): void {
+  try {
+    localStorage.setItem(PENDING_PROFILE_DELETES_KEY, JSON.stringify([...new Set(slots)]));
+  } catch {}
+}
+
+function queueProfileDelete(profileIndex: number): void {
+  writePendingProfileDeletes([...readPendingProfileDeletes(), profileIndex]);
+}
+
+function dropPendingProfileDelete(profileIndex: number): void {
+  writePendingProfileDeletes(readPendingProfileDeletes().filter((n) => n !== profileIndex));
+}
+
+function purgeNuvioSlotStorage(profileIndex: number): void {
+  try {
+    const slotSuffix = `.slot.${profileIndex}`;
+    const nuvioSuffix = `.nuvio-${profileIndex}`;
+    const exact = new Set([
+      `harbor.nuvio.local-avatar.${profileIndex}`,
+      `harbor.nuvio.kid.${profileIndex}`,
+      `harbor.nuvio.locked-tabs.${profileIndex}`,
+      `harbor.nuvio.dismissedNextUp.v1.${profileIndex}`,
+      `harbor.installed-addons.nuvio-${profileIndex}`,
+      `harbor.cw.dismissed.private.v1.nuvio-${profileIndex}`,
+    ]);
+    const remove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+      if (
+        exact.has(key) ||
+        (key.includes("nuvio") && (key.endsWith(slotSuffix) || key.endsWith(nuvioSuffix)))
+      ) {
+        remove.push(key);
+      }
+    }
+    for (const key of remove) localStorage.removeItem(key);
+  } catch {}
+}
+
+async function flushPendingProfileDeletes(): Promise<void> {
+  if (!isNuvioSignedIn()) return;
+  for (const slot of readPendingProfileDeletes()) {
+    try {
+      const res = await nuvioFetch("/rest/v1/rpc/sync_delete_profile_data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          p_profile_id: slot,
+          p_origin_client_id: "harbor-desktop-sync-client-01",
+        }),
+      });
+      if (res.ok) dropPendingProfileDelete(slot);
+    } catch {}
+  }
+}
+
 import DEFAULT_AVATAR_CATALOG from "./nuvio-avatar-catalog-data.json";
 
 export const NUVIO_PROFILE_COLORS = [
@@ -132,6 +203,7 @@ export function resolveNuvioAvatar(
  */
 export async function pullNuvioProfiles(): Promise<NuvioProfile[]> {
   if (!isNuvioSignedIn()) return [];
+  await flushPendingProfileDeletes();
 
   try {
     const res = await nuvioFetch("/rest/v1/rpc/sync_pull_profiles", {
@@ -991,16 +1063,16 @@ export async function deleteNuvioProfile(profileIndex: number): Promise<boolean>
 
   saveNuvioState({ ...state, profiles: remaining, activeProfileIndex: active });
   forgetNuvioPin(profileIndex);
+  purgeNuvioSlotStorage(profileIndex);
 
   try {
-    localStorage.removeItem(`harbor.nuvio.kid.${profileIndex}`);
-    localStorage.removeItem(`harbor.nuvio.locked-tabs.${profileIndex}`);
     sessionStorage.removeItem(`harbor.nuvio.unlocked.${profileIndex}`);
   } catch {}
 
   window.dispatchEvent(new CustomEvent("harbor:nuvio-profiles-updated", { detail: remaining }));
   window.dispatchEvent(new CustomEvent("harbor:nuvio-profile-changed"));
 
+  queueProfileDelete(profileIndex);
   if (!isNuvioSignedIn()) {
     return true;
   }
@@ -1027,6 +1099,12 @@ export async function deleteNuvioProfile(profileIndex: number): Promise<boolean>
           }),
         });
       }
+
+      if (!res.ok) {
+        console.warn("[nuvio] profile deletion RPC failed; queued for retry", res.status);
+        return;
+      }
+      dropPendingProfileDelete(profileIndex);
 
       // Push remaining roster to ensure the profile slot is expunged across all other devices
       const remainingPayloads: ProfilePushPayload[] = remaining.map((p) => ({

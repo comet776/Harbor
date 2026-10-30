@@ -1344,7 +1344,11 @@ test("simultaneous detail and home watched reconciliation shares one cloud snaps
       json: async () => [{ content_id: "tt-one", content_type: "movie" }],
     } as Response);
     await Promise.all([fromHome, fromDetail]);
-    assert.equal(calls, 2, "one RPC and one verified table snapshot are shared");
+    assert.equal(
+      calls,
+      3,
+      "the watched RPC and verified table snapshot are shared; the settings blob has its own cadence",
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -82,6 +82,12 @@ test("Profile mutations preserve pin_enabled for every profile in the pushed ros
   );
 });
 
+test("Profile deletion purges slot-scoped caches and survives offline", () => {
+  assert.match(nuvioProfiles, /purgeNuvioSlotStorage\(profileIndex\)/);
+  assert.match(nuvioProfiles, /queueProfileDelete\(profileIndex\)/);
+  assert.match(nuvioProfiles, /flushPendingProfileDeletes\(\)/);
+});
+
 test("PIN switch security strictly prevents bypassing PIN when changing profiles", () => {
   // setActiveNuvioProfile clears previous profile session unlocks
   assert.match(nuvioProfiles, /nuvioSessionUnlockedIndices\.clear\(\)/);

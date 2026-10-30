@@ -37,7 +37,7 @@ export function AccountProviderPanel() {
       sanitizeStremioLocalCw();
       const stremioAuth = readPrimaryStremioSession()?.authKey;
       if (stremioAuth) {
-        void expungeLeachedNuvioItemsFromStremio(stremioAuth);
+        void expungeLeachedNuvioItemsFromStremio(stremioAuth, [], true);
       }
     }
   }, [activeProvider]);
@@ -72,12 +72,9 @@ export function AccountProviderPanel() {
       sanitizeStremioLocalCw();
       const stremioAuth = readPrimaryStremioSession()?.authKey;
       if (stremioAuth) {
-        void expungeLeachedNuvioItemsFromStremio(stremioAuth);
-      }
-    } else {
-      const stremioAuth = readPrimaryStremioSession()?.authKey;
-      if (stremioAuth) {
-        void expungeLeachedNuvioItemsFromStremio(stremioAuth);
+        // This is the one safe moment to delete the leaked rows: the provider
+        // is Stremio again, so libraryPut is no longer sealed.
+        void expungeLeachedNuvioItemsFromStremio(stremioAuth, [], true);
       }
     }
     window.dispatchEvent(

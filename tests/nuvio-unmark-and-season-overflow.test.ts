@@ -134,7 +134,7 @@ test("nuvio-sync uses resolveNextEpisodeForSeries to prevent synthetic S1E11 ove
   );
   assert.match(
     nuvioSyncSrc,
-    /if \(nextTarget === null\) \{\s*clearLocalCw\(entry\.id, `nuvio-\$\{profileIndex\}`\);/,
+    /if \(nextTarget === null\) \{\s*markNuvioSeriesFinished\([\s\S]*?\);\s*clearLocalCw\(\s*entry\.id,\s*`nuvio-\$\{profileIndex\}`,?\s*\);/,
     "reconcileNuvioWatched must clear completed series when series is genuinely finished, preserving CW on undefined metadata",
   );
   assert.match(
@@ -142,6 +142,15 @@ test("nuvio-sync uses resolveNextEpisodeForSeries to prevent synthetic S1E11 ove
     /if \(!hasProgress\) \{\s*clearLocalCw\(entry\.id, `nuvio-\$\{profileIndex\}`\);/,
     "reconcileNuvioWatched must remove series from CW when all episodes are unmarked and no progress exists",
   );
+});
+
+test("finished-series markers prevent fabricated Next Up cards", () => {
+  const playbackSrc = read("../src/lib/nuvio/nuvio-playback.ts");
+  assert.match(playbackSrc, /readFinishedNuvioSeries/);
+  assert.match(playbackSrc, /const isFinished =[\s\S]*?finishedSeries\.has/);
+  assert.match(playbackSrc, /if \(isFinished && !keepCaughtUpForTimer\) continue;/);
+  assert.match(nuvioSyncSrc, /markNuvioSeriesFinished\(/);
+  assert.match(nuvioSyncSrc, /clearNuvioSeriesFinished\(/);
 });
 
 test("reconcileNuvioWatchedEpisodes unmarks all local episodes when mobile completely unmarks target series (e.g. Tulsa King)", () => {

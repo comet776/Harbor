@@ -382,10 +382,11 @@ export async function removeStremioLibraryItem(
 export async function expungeLeachedNuvioItemsFromStremio(
   authKey?: string | null,
   leachedIds: string[] = [],
+  forceAllow = false,
 ): Promise<void> {
-  if (!isNuvioProviderActive()) return;
-  const ak = authKey || readPrimaryStremioAuthKey();
-  if (!ak) return;
+  const nuvioActive = isNuvioProviderActive();
+  if (!nuvioActive && !forceAllow) return;
+
   const targetIds = new Set<string>(leachedIds);
   try {
     for (const id of collectAllNuvioItemIds()) {
@@ -395,12 +396,9 @@ export async function expungeLeachedNuvioItemsFromStremio(
 
   if (targetIds.size === 0) return;
 
-  for (const id of targetIds) {
-    try {
-      await removeStremioLibraryItem(ak, id, false);
-    } catch {}
-  }
-
+  // Always clean local caches and queued writes first. This is the only safe
+  // path while Nuvio is active; it also stops the per-id Stremio datastore
+  // reads that previously ran on every reconcile tick.
   try {
     const rawQ = localStorage.getItem("harbor.stremio.write-queue.v1");
     if (rawQ) {
@@ -417,6 +415,17 @@ export async function expungeLeachedNuvioItemsFromStremio(
   } catch {}
 
   invalidateLibraryCache();
+
+  if (nuvioActive && !forceAllow) return;
+
+  const ak = authKey || readPrimaryStremioAuthKey();
+  if (!ak) return;
+
+  for (const id of targetIds) {
+    try {
+      await removeStremioLibraryItem(ak, id, true);
+    } catch {}
+  }
 }
 
 export const CLOUD_OK = /^(tt\d|kitsu:|mal:|anilist:|anidb:|tmdb:)/;

@@ -687,7 +687,7 @@ export function Home({
         void reconcileNuvioWatched(undefined, { force: true });
         void refreshExternalCw(true);
       }
-    }, 30000);
+    }, 120000);
     window.addEventListener("harbor:nuvio-profile-changed", onProfile);
     window.addEventListener("harbor:account-provider-changed", onProfile);
     window.addEventListener("focus", onFocus);

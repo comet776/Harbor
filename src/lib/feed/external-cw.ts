@@ -611,7 +611,7 @@ export function useExternalCw(enabled = true): LibraryItem[] {
     };
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVisible);
-    const pollMs = isNuvioSignedIn() && isNuvioProviderActive() ? 30_000 : STALE_MS;
+    const pollMs = isNuvioSignedIn() && isNuvioProviderActive() ? 120_000 : STALE_MS;
     const timer = window.setInterval(onVisible, pollMs);
     return () => {
       window.removeEventListener("focus", onFocus);

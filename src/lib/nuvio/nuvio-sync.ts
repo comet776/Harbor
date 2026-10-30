@@ -13,8 +13,8 @@ import {
   saveNuvioState,
 } from "./nuvio-client";
 import type { NuvioAddonItem, NuvioWatchProgress, NuvioWatchedItem } from "./nuvio-types";
-import { reconcileNuvioWatchedFlags, setWatchedFlag } from "@/lib/watched-flag";
-import { reconcileNuvioMovieWatched, setMovieWatchedLocal } from "@/lib/movie-watched";
+import { reconcileNuvioWatchedFlags } from "@/lib/watched-flag";
+import { reconcileNuvioMovieWatched } from "@/lib/movie-watched";
 import { reconcileNuvioWatchedEpisodes } from "@/lib/manual-watched";
 import {
   clearLocalCw,
@@ -34,13 +34,14 @@ import {
   readCachedNuvioPlaybackItems,
   writeCachedNuvioPlaybackItems,
   buildNuvioPlaybackItems,
+  markNuvioSeriesFinished,
+  clearNuvioSeriesFinished,
 } from "./nuvio-playback";
 import { readCachedNuvioLibrary } from "./nuvio-library";
 import { meta as fetchMeta } from "@/lib/cinemeta";
 import type { Addon } from "@/lib/addons";
 import { fetchManifestAt } from "@/lib/addon-store";
 import { recordNuvioAddons } from "./nuvio-addon-registry";
-import { expungeLeachedNuvioItemsFromStremio } from "@/lib/stremio";
 import { undismissCw } from "@/lib/cw-dismiss";
 import { loadStoredSettings } from "@/lib/settings/load";
 import { tmdbDetails } from "@/lib/providers/tmdb/tmdb-details";
@@ -99,8 +100,10 @@ const WATCH_PROGRESS_CACHE_PREFIX = "harbor.nuvio.watch_progress.";
 // Full-table snapshots are the only way to confirm remote deletions, but they
 // are also the most expensive path. Routine pulls use the RPC batch; a full
 // snapshot is forced by a pending mutation or by this interval.
-const FULL_SYNC_INTERVAL_MS = 15_000;
+const FULL_SYNC_INTERVAL_MS = 2 * 60_000;
 const lastFullSyncAt = new Map<string, number>();
+const DISMISSED_SETTINGS_TTL_MS = 2 * 60_000;
+const dismissedSettingsPulledAt = new Map<number, number>();
 
 type NuvioCoordinate = { content_id: string; season?: number | null; episode?: number | null };
 type PendingChange = {
@@ -911,6 +914,11 @@ export async function pushWatchedItemToNuvio(
     writeCachedWatchedItems(profileIndex, updatedWatched);
   } catch {}
 
+  const reopenedSeries = items
+    .filter((item) => item.season != null && item.episode != null)
+    .map((item) => item.contentId);
+  if (reopenedSeries.length > 0) clearNuvioSeriesFinished(reopenedSeries, profileIndex);
+
   const recorded = recordPending(
     profileIndex,
     accountId,
@@ -1541,7 +1549,6 @@ export function reconcileNuvioWatched(
   harborProfileId?: string | number,
   options?: { force?: boolean },
 ): Promise<void> {
-  void expungeLeachedNuvioItemsFromStremio().catch(() => {});
   if (!isNuvioSignedIn() || !isNuvioProviderActive()) return Promise.resolve();
   const accountId = getNuvioAccountId();
   if (!accountId) return Promise.resolve();
@@ -1620,45 +1627,6 @@ async function reconcileNuvioWatchedOnce(
     accountId,
   );
 
-  for (const id of serverWatchedIds) {
-    setWatchedFlag(id, true, profileIndex);
-  }
-  for (const id of serverMovieIds) {
-    setMovieWatchedLocal(id, true, profileIndex);
-  }
-
-  try {
-    const scopedFlagKey = `harbor.watchedFlag.${nuvioWatchedScope(profileIndex, accountId)}`;
-    const scopedMovieKey = `harbor.moviewatched.${nuvioWatchedScope(profileIndex, accountId)}`;
-    for (const key of [scopedFlagKey, scopedMovieKey]) {
-      const raw = localStorage.getItem(key);
-      if (raw) {
-        const stored = JSON.parse(raw);
-        if (Array.isArray(stored)) {
-          for (const localId of stored) {
-            const cleanLocal = localId.replace(/^(series|movie|tmdb):/, "").trim();
-            const hasWatched =
-              serverWatchedIds.has(localId) || (cleanLocal && serverWatchedIds.has(cleanLocal));
-            const hasMovie =
-              serverMovieIds.has(localId) || (cleanLocal && serverMovieIds.has(cleanLocal));
-            if (!hasWatched && !hasMovie) {
-              const hasPending = Object.values(pending).some(
-                (p) =>
-                  p.kind === "watched" &&
-                  !p.deleted &&
-                  (p.row.content_id === localId || (cleanLocal && p.row.content_id === cleanLocal)),
-              );
-              if (!hasPending) {
-                setWatchedFlag(localId, false, profileIndex);
-                setMovieWatchedLocal(localId, false, profileIndex);
-              }
-            }
-          }
-        }
-      }
-    }
-  } catch {}
-
   const pendingMovieIds = new Set<string>();
   for (const p of Object.values(pending)) {
     if (p.kind === "watched" && !p.deleted && p.row.content_id) {
@@ -1678,10 +1646,13 @@ async function reconcileNuvioWatchedOnce(
   // 4. Update Continue Watching tray and reconcile playback items
   try {
     const progressItems = readCachedWatchProgress(profileIndex);
-    const dismissedKeys =
-      newlyWatchedShows.size > 0
-        ? await pullDismissedNextUpKeysFromNuvio(profileIndex)
-        : readCachedDismissedNextUpKeys(profileIndex);
+    const dismissedPullAt = dismissedSettingsPulledAt.get(profileIndex) ?? 0;
+    const shouldPullDismissed =
+      newlyWatchedShows.size > 0 || Date.now() - dismissedPullAt >= DISMISSED_SETTINGS_TTL_MS;
+    const dismissedKeys = shouldPullDismissed
+      ? await pullDismissedNextUpKeysFromNuvio(profileIndex)
+      : readCachedDismissedNextUpKeys(profileIndex);
+    if (shouldPullDismissed) dismissedSettingsPulledAt.set(profileIndex, Date.now());
     const localEntries = listLocalCw(false);
     const seenShowIds = new Set<string>();
 
@@ -1722,6 +1693,12 @@ async function reconcileNuvioWatchedOnce(
       register(cleanId);
       register(`tmdb:${cleanId}`);
       register(`series:${cleanId}`);
+    }
+
+    // A newly watched episode can reopen a series the metadata resolver had
+    // previously confirmed as finished.
+    if (newlyWatchedShows.size > 0) {
+      clearNuvioSeriesFinished(Array.from(newlyWatchedShows), profileIndex);
     }
 
     // Only un-dismiss shows that gained newly watched episodes from the server (e.g. watched on mobile),
@@ -1777,6 +1754,7 @@ async function reconcileNuvioWatchedOnce(
           maxInfo.episode,
         );
         if (nextTarget === null) {
+          markNuvioSeriesFinished([entry.id, cleanEntryId], profileIndex);
           clearLocalCw(entry.id, `nuvio-${profileIndex}`);
           if (!cwKeepsCaughtUpForTimer()) {
             clearResume(entry.id, undefined, undefined, `nuvio-${profileIndex}`);
@@ -1795,6 +1773,7 @@ async function reconcileNuvioWatchedOnce(
             );
           }
         } else if (nextTarget) {
+          clearNuvioSeriesFinished([entry.id, cleanEntryId], profileIndex);
           const nextS = nextTarget.season;
           const nextE = nextTarget.episode;
           const localHasProgress =
@@ -1872,6 +1851,7 @@ async function reconcileNuvioWatchedOnce(
         maxInfo.episode,
       );
       if (nextTarget === null) {
+        markNuvioSeriesFinished([item.content_id, cleanShowId], profileIndex);
         if (cwKeepsCaughtUpForTimer()) {
           nextTarget = { season: maxInfo.season, episode: maxInfo.episode };
         } else {
@@ -1880,6 +1860,8 @@ async function reconcileNuvioWatchedOnce(
       } else if (nextTarget === undefined) {
         // Metadata unavailable: keep current max watched episode rather than discarding
         nextTarget = { season: maxInfo.season, episode: maxInfo.episode };
+      } else {
+        clearNuvioSeriesFinished([item.content_id, cleanShowId], profileIndex);
       }
       const nextS = nextTarget.season;
       const nextE = nextTarget.episode;
@@ -1959,9 +1941,6 @@ async function reconcileNuvioWatchedOnce(
   window.dispatchEvent(
     new CustomEvent("harbor:nuvio-watched-reconciled", { detail: { profileIndex } }),
   );
-  try {
-    void expungeLeachedNuvioItemsFromStremio().catch(() => {});
-  } catch {}
 }
 
 /**

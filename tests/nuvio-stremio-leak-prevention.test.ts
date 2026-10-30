@@ -75,13 +75,17 @@ test("nuvio-client exports collectAllNuvioItemIds scanning all Nuvio storage pre
   assert.match(nuvioClient, /key\.startsWith\("harbor\.watchedFlag\.nuvio"\)/);
 });
 
-test("automatic expungement runs across App startup, Nuvio activation, reconcile, and provider switch", () => {
+test("automatic expungement runs on startup, activation, and the return to Stremio", () => {
   assert.match(app, /function StremioLeachedExpungeRunner\(\)/);
   assert.match(app, /void expungeLeachedNuvioItemsFromStremio\(\)\.catch\(\(\) => \{\}\);/);
   assert.match(app, /<StremioLeachedExpungeRunner \/>/);
   assert.match(nuvioAuth, /export function activateNuvioAccountProvider/);
   assert.match(nuvioAuth, /void expungeLeachedNuvioItemsFromStremio\(\)\.catch\(\(\) => \{\}\);/);
   assert.match(nuvioSync, /export async function reconcileNuvioWatched/);
-  assert.match(nuvioSync, /void expungeLeachedNuvioItemsFromStremio\(\)\.catch\(\(\) => \{\}\);/);
-  assert.match(accountProviderPanel, /void expungeLeachedNuvioItemsFromStremio\(stremioAuth\);/);
+  // Reconcile runs every couple of minutes; it must not issue per-title Stremio reads.
+  assert.doesNotMatch(nuvioSync, /expungeLeachedNuvioItemsFromStremio/);
+  assert.match(
+    accountProviderPanel,
+    /void expungeLeachedNuvioItemsFromStremio\(stremioAuth, \[\], true\);/,
+  );
 });
