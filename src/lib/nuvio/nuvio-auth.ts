@@ -101,17 +101,24 @@ export async function signInWithEmailPassword(
     };
 
     const state = loadNuvioState();
-    clearAllNuvioWatchedFlags();
-    clearAllNuvioMovieWatched();
-    clearAllNuvioManualWatched();
-    clearAllNuvioLocalCw();
-    clearAllNuvioResume();
-    clearCachedPlaybackItems();
-    clearCachedWatchProgress();
-    clearNuvioLibraryCache();
-    clearCwCache();
-    clearWatchlistCache();
-    clearNuvioCwMemoryCache();
+    const sameAccount = Boolean(
+      state.session?.user?.id && session.user?.id && state.session.user.id === session.user.id,
+    );
+    // Re-authenticating the same account must not wipe local watched/CW data
+    // that has not reached the cloud yet. A different account still starts clean.
+    if (!sameAccount) {
+      clearAllNuvioWatchedFlags();
+      clearAllNuvioMovieWatched();
+      clearAllNuvioManualWatched();
+      clearAllNuvioLocalCw();
+      clearAllNuvioResume();
+      clearCachedPlaybackItems();
+      clearCachedWatchProgress();
+      clearNuvioLibraryCache();
+      clearCwCache();
+      clearWatchlistCache();
+      clearNuvioCwMemoryCache();
+    }
     saveNuvioState({ ...state, session });
     activateNuvioAccountProvider();
 
@@ -253,17 +260,22 @@ export async function pollDeviceCodeSession(
         };
 
         const state = loadNuvioState();
-        clearAllNuvioWatchedFlags();
-        clearAllNuvioMovieWatched();
-        clearAllNuvioManualWatched();
-        clearAllNuvioLocalCw();
-        clearAllNuvioResume();
-        clearCachedPlaybackItems();
-        clearCachedWatchProgress();
-        clearNuvioLibraryCache();
-        clearCwCache();
-        clearWatchlistCache();
-        clearNuvioCwMemoryCache();
+        const sameAccount = Boolean(
+          state.session?.user?.id && session.user?.id && state.session.user.id === session.user.id,
+        );
+        if (!sameAccount) {
+          clearAllNuvioWatchedFlags();
+          clearAllNuvioMovieWatched();
+          clearAllNuvioManualWatched();
+          clearAllNuvioLocalCw();
+          clearAllNuvioResume();
+          clearCachedPlaybackItems();
+          clearCachedWatchProgress();
+          clearNuvioLibraryCache();
+          clearCwCache();
+          clearWatchlistCache();
+          clearNuvioCwMemoryCache();
+        }
         saveNuvioState({ ...state, session });
         activateNuvioAccountProvider();
         await fetchNuvioProfiles();
